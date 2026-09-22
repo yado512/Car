@@ -1,0 +1,37 @@
+# Build & Compiled artifacts
+build/
+dist/
+out/
+bin/
+obj/
+ephemeral/
+.dart_tool/
+
+# Package managers & Virtual Environments
+node_modules/
+vendor/
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# IDE & Editor caches
+.vscode/
+.idea/
+*.suo
+*.user
+*.useroscan
+*.sln.docstates
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large binaries exceeding GitHub 100MB limit
+*.pdb
+*.so
+*.apk
+*.rar
+Special requirements.xlsx

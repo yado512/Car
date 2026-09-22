@@ -1,0 +1,2478 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نظام إدارة وصيانة أسطول سيارات جوشي مصر | JUSHI EGYPT</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- SheetJS CDN (using cdnjs to avoid storage tracking prevention blocks) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- Tesseract.js for Optical Character Recognition (OCR) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+
+  <style>
+    :root {
+      --jushi-blue: #004fb6;
+      --jushi-cyan: #38bdf8;
+      --jushi-dark: #070d18;
+      --panel-bg: rgba(15, 23, 42, 0.94);
+      --card-bg: rgba(23, 37, 63, 0.78);
+      --card-hover: rgba(30, 48, 80, 0.95);
+      --text-main: #f1f5f9;
+      --text-sub: #94a3b8;
+      --border-color: rgba(56, 189, 248, 0.18);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #0284c7;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top left, #0f1e36, #070d18 70%);
+      color: var(--text-main);
+      padding: 20px 16px 60px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1340px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 16px 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .jushi-logo-container {
+      background: #ffffff;
+      padding: 6px 12px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      min-width: 60px;
+      min-height: 48px;
+    }
+
+    .jushi-logo-img {
+      height: 46px;
+      width: auto;
+      object-fit: contain;
+      display: block;
+    }
+
+    .title-box h1 {
+      font-size: 20px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.3;
+    }
+
+    .title-box p {
+      font-size: 13px;
+      color: var(--jushi-cyan);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .cloud-sync-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--success);
+      color: var(--success);
+      transition: all 0.3s ease;
+    }
+
+    .cloud-sync-badge.syncing {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--jushi-cyan);
+      color: var(--jushi-cyan);
+    }
+
+    .cloud-sync-badge.offline {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: var(--warning);
+      color: var(--warning);
+    }
+
+    .cloud-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .btn-refresh-cloud {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-color);
+      color: var(--jushi-cyan);
+      padding: 6px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-refresh-cloud:hover {
+      background: rgba(56, 189, 248, 0.15);
+      transform: translateY(-1px);
+    }
+
+    /* Fleet Cards Grid */
+    .section-headline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 0 4px;
+    }
+
+    .section-headline span {
+      font-size: 14px;
+      color: var(--text-sub);
+      font-weight: 600;
+    }
+
+    .fleet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .car-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 115px;
+    }
+
+    .car-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--border-color);
+      transition: background 0.3s ease;
+    }
+
+    .car-card:hover {
+      background: var(--card-hover);
+      border-color: var(--jushi-cyan);
+      transform: translateY(-3px);
+      box-shadow: 0 10px 20px -8px rgba(56, 189, 248, 0.35);
+    }
+
+    .car-card.active {
+      background: linear-gradient(145deg, rgba(0, 79, 182, 0.28), rgba(15, 23, 42, 0.92));
+      border-color: var(--jushi-cyan);
+      box-shadow: 0 0 0 1.5px var(--jushi-cyan), 0 8px 25px rgba(56, 189, 248, 0.25);
+    }
+
+    .car-card.active::before {
+      background: var(--jushi-cyan);
+    }
+
+    .car-card.alarm-warning {
+      border-color: var(--warning);
+      animation: pulse-warn 2s infinite;
+    }
+
+    .car-card.alarm-warning::before {
+      background: var(--warning);
+    }
+
+    .car-card.alarm-danger {
+      border-color: var(--danger);
+      background: rgba(239, 68, 68, 0.12);
+      animation: pulse-alert 1.5s infinite;
+    }
+
+    .car-card.alarm-danger::before {
+      background: var(--danger);
+    }
+
+    @keyframes pulse-warn {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+      }
+    }
+
+    @keyframes pulse-alert {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+      }
+
+      50% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+      }
+    }
+
+    .card-top {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .car-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .badge-alarm {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      width: fit-content;
+      margin-top: 4px;
+    }
+
+    .badge-alarm.warn {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+      border: 1px solid var(--warning);
+    }
+
+    .badge-alarm.dang {
+      background: rgba(239, 68, 68, 0.25);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .car-km-text {
+      font-size: 12px;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .car-km-text strong {
+      color: var(--jushi-cyan);
+      font-weight: 600;
+    }
+
+    /* Detail Panel */
+    .details-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 28px;
+      display: grid;
+      gap: 28px;
+      box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(14px);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .panel-title-area h2 {
+      font-size: 22px;
+      color: #ffffff;
+      font-weight: 800;
+    }
+
+    .panel-title-area p {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 3px;
+    }
+
+    .panel-header-buttons {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-excel-export {
+      background: linear-gradient(135deg, #15803d, #16a34a);
+      color: #ffffff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+      transition: all 0.2s;
+    }
+
+    .btn-excel-export:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(22, 163, 74, 0.45);
+    }
+
+    .quick-update-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 8px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    .quick-update-box input {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 15px;
+      font-weight: bold;
+      width: 120px;
+      outline: none;
+      text-align: center;
+    }
+
+    .quick-update-box button {
+      background: linear-gradient(135deg, var(--jushi-blue), #0284c7);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 16px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    /* License Section */
+    .license-card {
+      background: linear-gradient(180deg, rgba(16, 28, 50, 0.9), rgba(11, 19, 35, 0.9));
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 16px;
+      padding: 22px;
+    }
+
+    .license-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .license-header h3 {
+      font-size: 17px;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .license-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-action-small {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .btn-action-small:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--jushi-cyan);
+    }
+
+    .btn-action-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-action-danger:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .license-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 850px) {
+      .license-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .license-info-display {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .info-item label {
+      font-size: 11px;
+      color: var(--text-sub);
+    }
+
+    .info-item strong {
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .license-photo-wrapper {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px dashed var(--border-color);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 160px;
+      position: relative;
+    }
+
+    .license-photo-preview {
+      max-width: 100%;
+      max-height: 140px;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+
+    .photo-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    /* Parts Tracker Grid */
+    .parts-status-container {
+      background: rgba(13, 20, 36, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .parts-status-container h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--jushi-cyan);
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .parts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .part-track-card {
+      background: rgba(23, 37, 63, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .part-track-card.overdue {
+      border-color: var(--danger);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .part-track-card.due-soon {
+      border-color: var(--warning);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .part-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .part-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .part-badge {
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .part-progress-bg {
+      background: rgba(255, 255, 255, 0.08);
+      height: 8px;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .part-progress-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.3s;
+    }
+
+    .part-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+
+    /* Actions & Forms */
+    .actions-row {
+      display: grid;
+      grid-template-columns: 1.1fr 1.4fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+
+      .actions-row,
+      .fuel-section-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+    .sub-panel {
+      background: rgba(13, 20, 36, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .sub-panel h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--jushi-cyan);
+      margin-bottom: 16px;
+    }
+
+    .app-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .app-form label {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-bottom: -6px;
+    }
+
+    .app-form input,
+    .app-form select,
+    .app-form textarea {
+      background: rgba(23, 37, 63, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .app-form textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .app-form input:focus,
+    .app-form select:focus,
+    .app-form textarea:focus {
+      border-color: var(--jushi-cyan);
+    }
+
+    .app-form input[readonly] {
+      background: rgba(56, 189, 248, 0.05);
+      border-style: dashed;
+      color: var(--jushi-cyan);
+      font-weight: bold;
+    }
+
+    .early-reason-box {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      padding: 12px;
+      border-radius: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .early-reason-label {
+      color: var(--warning);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .btn-submit {
+      background: linear-gradient(135deg, var(--jushi-blue), #0284c7);
+      color: #fff;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 4px;
+      transition: transform 0.2s ease;
+    }
+
+    .btn-submit:hover {
+      transform: translateY(-1px);
+    }
+
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: right;
+      color: var(--text-sub);
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 12px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .btn-delete {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .btn-delete:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .empty-history {
+      text-align: center;
+      padding: 30px;
+      color: var(--text-sub);
+      font-size: 13px;
+    }
+
+    .timing-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .timing-badge.on-time {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .timing-badge.early {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+      border: 1px solid var(--warning);
+    }
+
+    .timing-badge.overdue {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .early-comment-text {
+      font-size: 11px;
+      color: #fcd34d;
+      display: block;
+      margin-top: 3px;
+      font-style: italic;
+    }
+
+    /* Fuel Control Card */
+    .fuel-control-card {
+      background: linear-gradient(180deg, rgba(16, 30, 54, 0.95), rgba(11, 18, 33, 0.95));
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .fuel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .fuel-header h3 {
+      font-size: 17px;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .fuel-guide-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 11px;
+    }
+
+    .fuel-pill {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    .fuel-pill.good {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid var(--success);
+    }
+
+    .fuel-pill.fair {
+      background: rgba(2, 132, 199, 0.15);
+      color: var(--jushi-cyan);
+      border: 1px solid var(--jushi-cyan);
+    }
+
+    .fuel-pill.elevated {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid var(--warning);
+    }
+
+    .fuel-pill.high {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .fuel-section-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 20px;
+    }
+
+    .consumption-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .consumption-badge.good {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--success);
+    }
+
+    .consumption-badge.fair {
+      background: rgba(2, 132, 199, 0.2);
+      color: var(--jushi-cyan);
+    }
+
+    .consumption-badge.elevated {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+    }
+
+    .consumption-badge.high {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast-box {
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 13px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      animation: slide-up 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toast-box.success {
+      border-color: var(--success);
+    }
+
+    .toast-box.error {
+      border-color: var(--danger);
+    }
+
+    @keyframes slide-up {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <header>
+      <div class="brand-section">
+        <div class="jushi-logo-container">
+          <img src="Logo.PNG" alt="شعار شركة جوشي" class="jushi-logo-img"
+            onerror="this.parentElement.innerHTML='<strong style=\'color:#004fb6;font-size:20px;\'>JUSHI</strong>'" />
+        </div>
+        <div class="title-box">
+          <h1>صيانات سيارات شركة جوشي مصر</h1>
+          <p>نظام الصيانة والرقابة الفنية ومتابعة استهلاك الوقود والرخص المربوط بالسحابة</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn-refresh-cloud" onclick="fetchLiveGoogleSheetData(true)">
+          <span>🔄 تحديث البيانات الحية</span>
+        </button>
+        <div id="cloudStatusBadge" class="cloud-sync-badge">
+          <span class="cloud-dot"></span>
+          <span id="cloudStatusText">جاري فحص الاتصال...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Fleet Selection Cards -->
+    <div class="section-headline">
+      <span>اختر المركبة من الأسطول:</span>
+      <span style="font-size: 12px;">الأزرار تتابع الصيانات الدورية ومواعيد انتهاء الرخص</span>
+    </div>
+    <div class="fleet-grid" id="fleetButtons"></div>
+
+    <!-- Main Active Car Details Panel -->
+    <div class="details-panel" id="carPanel">
+      <div class="panel-header">
+        <div class="panel-title-area">
+          <h2 id="currentCarTitle">--</h2>
+          <p>بيانات الصيانة الدورية وتتبع مواعيد الاستهلاك والرخصة</p>
+        </div>
+        <div class="panel-header-buttons">
+          <button class="btn-excel-export" onclick="exportCarDataToExcel()">
+            <span>📊 تصدير تقرير إكسيل شامل</span>
+          </button>
+          <div class="quick-update-box">
+            <label for="liveKmInput" style="font-size: 12px; color: var(--text-sub);">العداد الفعلي (كم):</label>
+            <input type="number" id="liveKmInput" />
+            <button onclick="updateMileageDirectly()">تحديث العداد</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- License Section with OCR and Edit Options -->
+      <div class="license-card">
+        <div class="license-header">
+          <h3>🪪 بيانات رخصة المركبة وفترة السريان</h3>
+          <div class="license-header-actions">
+            <button class="btn-action-small" onclick="toggleLicenseEdit()">✏️ تعديل يدوي</button>
+            <button class="btn-action-small btn-action-danger" onclick="clearLicenseData()">مسح البيانات</button>
+            <span id="licenseStatusBadge" class="timing-badge on-time">--</span>
+          </div>
+        </div>
+
+        <div class="license-grid">
+          <div class="license-info-display">
+            <div class="info-item">
+              <label>رقم اللوحة:</label>
+              <strong id="dispPlate">--</strong>
+            </div>
+            <div class="info-item">
+              <label>السائق / المسؤول:</label>
+              <strong id="dispDriver">--</strong>
+            </div>
+            <div class="info-item">
+              <label>رقم الشاسيه:</label>
+              <strong id="dispChassis">--</strong>
+            </div>
+            <div class="info-item">
+              <label>رقم الموتور:</label>
+              <strong id="dispMotor">--</strong>
+            </div>
+            <div class="info-item" style="grid-column: span 2;">
+              <label>تاريخ انتهاء الرخصة:</label>
+              <strong id="dispExpiry" style="color: var(--jushi-cyan);">--</strong>
+            </div>
+          </div>
+
+          <div class="license-photo-wrapper">
+            <img id="licenseImgPreview" class="license-photo-preview" style="display: none;" alt="صورة الرخصة"
+              onclick="document.getElementById('licenseImgInput').click()" />
+
+            <div id="licenseUploadPrompt"
+              style="text-align: center; color: var(--text-sub); font-size: 13px; cursor: pointer;"
+              onclick="document.getElementById('licenseImgInput').click()">
+              <div style="font-size: 26px; margin-bottom: 4px;">📁</div>
+              <strong>اضغط هنا لرفع صورة الرخصة</strong>
+              <p style="font-size: 11px; margin-top: 3px; color: var(--jushi-cyan);">يتم استخراج البيانات وقراءتها آلياً
+                وحفظها</p>
+            </div>
+
+            <div class="photo-actions" id="photoActionsBar" style="display: none;">
+              <button class="btn-action-small" onclick="document.getElementById('licenseImgInput').click()">تغيير
+                الصورة</button>
+              <button class="btn-action-small btn-action-danger" onclick="deleteLicenseImage()">حذف الصورة</button>
+            </div>
+
+            <input type="file" id="licenseImgInput" accept="image/*" style="display: none;"
+              onchange="handleLicenseImageUpload(event)" />
+          </div>
+        </div>
+
+        <div id="licenseEditFormContainer"
+          style="display: none; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+          <h4 style="font-size: 13px; color: var(--jushi-cyan); margin-bottom: 10px;">✏️ إدخال أو تعديل بيانات رخصة
+            المركبة:</h4>
+          <div class="app-form"
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+            <div>
+              <label>رقم اللوحة:</label>
+              <input type="text" id="inpPlate" placeholder="مثال: ط س ص 1234" />
+            </div>
+            <div>
+              <label>اسم السائق المسؤول:</label>
+              <input type="text" id="inpDriver" placeholder="اسم السائق" />
+            </div>
+            <div>
+              <label>رقم الشاسيه:</label>
+              <input type="text" id="inpChassis" placeholder="رقم الشاسيه" />
+            </div>
+            <div>
+              <label>رقم الموتور:</label>
+              <input type="text" id="inpMotor" placeholder="رقم الموتور" />
+            </div>
+            <div>
+              <label>تاريخ انتهاء الرخصة:</label>
+              <input type="date" id="inpExpiry" />
+            </div>
+            <div style="grid-column: 1 / -1; display: flex; gap: 10px;">
+              <button type="button" class="btn-submit" style="padding: 8px 16px;" onclick="saveLicenseDetails()">حفظ
+                البيانات ومزامنتها</button>
+              <button type="button" class="btn-action-small" onclick="toggleLicenseEdit()">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parts Grid Tracker -->
+      <div class="parts-status-container">
+        <h3>
+          <span>جدول استهلاك الأجزاء والصيانات الدورية</span>
+          <span style="font-size: 12px; font-weight: normal; color: var(--text-sub);">تتبع مستقل لكل قطعة بحسب جدول
+            الكيلومتر المعتمد</span>
+        </h3>
+        <div class="parts-grid" id="partsGrid"></div>
+      </div>
+
+      <!-- Maintenance Action & History Tables -->
+      <div class="actions-row">
+        <div class="sub-panel">
+          <h3>تسجيل تنفيذ صيانة لقطعة محددة</h3>
+          <form id="logMaintForm" class="app-form">
+            <label>نوع الصيانة أو القطعة (اختر أو اكتب يدوياً):</label>
+            <input list="maintenanceList" id="maintName" placeholder="ابحث أو اختر أو اكتب..."
+              oninput="onMaintenanceTypeChange(); checkEarlyServiceLive();" required />
+
+            <datalist id="maintenanceList">
+              <option value="تغيير زيت المحرك وفلتر الزيت"></option>
+              <option value="تغيير فلتر الهواء"></option>
+              <option value="تغيير فلتر التكييف"></option>
+              <option value="تغيير فلتر البنزين"></option>
+              <option value="تغيير طقم البوجيهات (شمعات احتراق)"></option>
+              <option value="تغيير سير المجموعة (الدينامو والتكييف)"></option>
+              <option value="تغيير تيل الفرامل"></option>
+              <option value="تغيير مياه التبريد"></option>
+              <option value="استبدال وتدوير الإطارات"></option>
+              <option value="تغيير سير الكاتينة (الداخلي)"></option>
+              <option value="تغيير زيت الفتيس (الجيربوكس)"></option>
+            </datalist>
+
+            <label>قراءة العداد عند التنفيذ (كم):</label>
+            <input type="number" id="serviceKm" placeholder="أدخل عداد اليوم"
+              oninput="calculateNextDueKm(); checkEarlyServiceLive();" required />
+
+            <!-- Dynamic Box for Early Replacement Reason -->
+            <div id="earlyReasonBox" class="early-reason-box">
+              <label class="early-reason-label" id="earlyReasonLabel">⚠️ صيانة مبكرة اضطرارية - اذكر سبب التغيير
+                الآن:</label>
+              <textarea id="earlyReasonInput"
+                placeholder="اكتب هنا سبب تغيير هذه القطعة قبل موعدها (مثل: كسر، صوت، تسريب، مشوار سفر مفاجئ...)"></textarea>
+            </div>
+
+            <label>دورة استهلاك هذه القطعة (بالكيلومتر):</label>
+            <input type="number" id="serviceCycleKm" value="10000" oninput="calculateNextDueKm()" required />
+
+            <label>الاستحقاق القادم لهذه القطعة فقط (كم):</label>
+            <input type="number" id="nextServiceKm" readonly />
+
+            <button type="submit" class="btn-submit">حفظ صيانة هذه القطعة وتحديث جدولها</button>
+          </form>
+        </div>
+
+        <div class="sub-panel table-container">
+          <h3>أرشيف سجل الصيانات وتوقيت التنفيذ</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>القطعة / الصيانة</th>
+                <th>التاريخ</th>
+                <th>العداد وقتها</th>
+                <th>الاستحقاق التالي</th>
+                <th>حالة التوقيت والملاحظات</th>
+                <th style="text-align: center; width: 50px;">حذف</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+          <div id="emptyTableMsg" class="empty-history" style="display: none;">لا يوجد سجل صيانات مسجل لهذه السيارة بعد.
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Fuel Control Section -->
+      <div class="fuel-control-card">
+        <div class="fuel-header">
+          <h3>⛽ رقابة معدل استهلاك البنزين الشهري (Fuel Control)</h3>
+          <div class="fuel-guide-pills">
+            <span class="fuel-pill good">أقل من 8.5 لتر: ممتاز</span>
+            <span class="fuel-pill fair">8.5 - 11.5 لتر: طبيعي</span>
+            <span class="fuel-pill elevated">11.5 - 14 لتر: مرتفع</span>
+            <span class="fuel-pill high">أكثر من 14 لتر: مفرط / خلل</span>
+          </div>
+        </div>
+
+        <div class="fuel-section-grid">
+          <div class="app-form">
+            <label>الشهر والسنة:</label>
+            <input type="month" id="fuelMonth" required />
+
+            <label>قراءة العداد أول الشهر (كم):</label>
+            <input type="number" id="fuelStartKm" placeholder="مثال: 45000" required />
+
+            <label>قراءة العداد آخر الشهر (كم):</label>
+            <input type="number" id="fuelEndKm" placeholder="مثال: 47200" required />
+
+            <label>إجمالي اللترات المستهلكة خلال الشهر:</label>
+            <input type="number" step="0.5" id="fuelLiters" placeholder="مثال: 190 لتر" required />
+
+            <button type="button" class="btn-submit" onclick="logFuelConsumption()">تسجيل الشهر واحتساب المعدل</button>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>الشهر</th>
+                  <th>المسافة المقطوعة</th>
+                  <th>اللترات</th>
+                  <th>المعدل (لتر/100كم)</th>
+                  <th>التقييم والرقابة</th>
+                  <th style="text-align: center; width: 45px;">حذف</th>
+                </tr>
+              </thead>
+              <tbody id="fuelTableBody"></tbody>
+            </table>
+            <div id="emptyFuelMsg" class="empty-history" style="display: none;">لم يتم تسجيل استهلاك بنزين شهري لهذه
+              السيارة بعد.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8LGLIh_UQbVQhC4TLFKNovcOg7pPEvsC44gyN9T0lkwhkNeVUmrLFZVGFUrSh5e7HGw/exec";
+    const ALERT_THRESHOLD = 1000;
+
+    // Parts list with cycles
+    const DEFAULT_PARTS = [
+      { key: "engine_oil_filter", name: "زيت المحرك وفلتر الزيت", cycle: 10000 },
+      { key: "air_filter", name: "فلتر الهواء", cycle: 20000 },
+      { key: "ac_filter", name: "فلتر التكييف", cycle: 20000 },
+      { key: "fuel_filter", name: "فلتر البنزين", cycle: 20000 },
+      { key: "spark_plugs", name: "طقم البوجيهات (شمعات احتراق)", cycle: 30000 },
+      { key: "serpentine_belt", name: "سير المجموعة (الدينامو والتكييف)", cycle: 40000 },
+      { key: "brakes", name: "تيل الفرامل", cycle: 40000 },
+      { key: "coolant", name: "مياه التبريد", cycle: 40000 },
+      { key: "tires", name: "استبدال وتدوير الإطارات", cycle: 50000 },
+      { key: "timing_belt", name: "سير الكاتينة (الداخلي)", cycle: 60000 },
+      { key: "transmission_oil", name: "زيت الفتيس (الجيربوكس)", cycle: 60000 }
+    ];
+
+    function createDefaultPartsTracker() {
+      const parts = {};
+      DEFAULT_PARTS.forEach(p => {
+        parts[p.key] = {
+          name: p.name,
+          cycle: p.cycle,
+          lastReplacedKm: 0,
+          nextDueKm: p.cycle
+        };
+      });
+      return parts;
+    }
+
+    // Jushi Egypt 11 Vehicles
+    const defaultFleetCars = [
+      "Skoda 81", "Skoda 79", "Skoda Kodiak", "Havel", "Dream",
+      "Nissan Navara", "Nissan Double", "BMW", "Chevrolet Talaga",
+      "Chevrolet Restaurant", "Ambulance"
+    ].map((name, index) => ({
+      id: index + 1,
+      name: name,
+      currentKm: 0,
+      license: {
+        plate: "",
+        driver: "",
+        chassis: "",
+        motor: "",
+        expiryDate: "",
+        photo: ""
+      },
+      parts: createDefaultPartsTracker(),
+      history: [],
+      fuelLogs: []
+    }));
+
+    // Local Storage Cache
+    let fleetData = JSON.parse(localStorage.getItem('jushi_fleet_master_cache')) || defaultFleetCars;
+    let selectedCarId = fleetData[0].id;
+
+    function persistLocal() {
+      localStorage.setItem('jushi_fleet_master_cache', JSON.stringify(fleetData));
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast-box ${type}`;
+      toast.innerHTML = `<span>${type === 'success' ? '✔️' : '⚠️'}</span> <span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function setCloudStatus(status, text) {
+      const badge = document.getElementById('cloudStatusBadge');
+      const label = document.getElementById('cloudStatusText');
+      if (badge && label) {
+        badge.className = `cloud-sync-badge ${status}`;
+        label.innerText = text;
+      }
+    }
+
+    // 1. GET with CORS-bypass: Simple request without custom headers to avoid preflight OPTIONS block
+    async function fetchLiveGoogleSheetData(manual = false) {
+      setCloudStatus('syncing', 'جاري جلب البيانات من Google Sheets...');
+      try {
+        const response = await fetch(`${SCRIPT_URL}?action=getAll&_ts=${Date.now()}`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP Error: ${response.status}`);
+        }
+
+        const resJson = await response.json();
+
+        if (resJson && resJson.status === 'success' && resJson.data) {
+          applyCloudDataToFleet(resJson.data);
+          setCloudStatus('', '🟢 متصل بالسحابة (Google Sheets)');
+          if (manual) showToast('تم تحديث البيانات الحية من السحابة بنجاح');
+          renderButtons();
+          renderDashboard();
+          return true;
+        } else {
+          throw new Error(resJson.message || 'Malformed Response');
+        }
+      } catch (err) {
+        console.warn('Live fetch failed, fallback to local state:', err);
+        setCloudStatus('offline', 'تعذر الاتصال بـ Google Sheets (عرض البيانات الاحتياطية)');
+        if (manual) showToast('تعذر جلب البيانات من السحابة، جاري عرض النسخة المخزنة', 'error');
+        renderButtons();
+        renderDashboard();
+        return false;
+      }
+    }
+
+    // 2. POST with CORS-bypass: Using text/plain;charset=utf-8 so browser skips preflight check
+    async function postToGoogleScript(payload) {
+      setCloudStatus('syncing', 'جاري المزامنة مع السحابة...');
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          },
+          body: JSON.stringify(payload),
+          redirect: 'follow'
+        });
+
+        const result = await response.json();
+        setCloudStatus('', '🟢 متصل بالسحابة (Google Sheets)');
+        return result;
+      } catch (err) {
+        console.warn('POST sync error (fallback active):', err);
+        setCloudStatus('offline', 'تم الحفظ محلياً (فشل التحديث السحابي)');
+        return null;
+      }
+    }
+
+    // Merge cloud data to local structures
+    function applyCloudDataToFleet(cloudData) {
+      if (!cloudData) return;
+      window._latestCloudData = cloudData;
+
+      // 1. Update Cars table info
+      if (Array.isArray(cloudData.cars)) {
+        cloudData.cars.forEach(remoteCar => {
+          const localCar = fleetData.find(c => String(c.id) === String(remoteCar.ID));
+          if (localCar) {
+            localCar.currentKm = Number(remoteCar.CurrentKm) || localCar.currentKm;
+            localCar.license.plate = remoteCar.Plate || localCar.license.plate;
+            localCar.license.driver = remoteCar.Driver || localCar.license.driver;
+            localCar.license.chassis = remoteCar.Chassis || localCar.license.chassis;
+            localCar.license.motor = remoteCar.Motor || localCar.license.motor;
+            localCar.license.expiryDate = remoteCar.ExpiryDate || localCar.license.expiryDate;
+            if (remoteCar.PhotoUrl && remoteCar.PhotoUrl.startsWith('data:image')) {
+              localCar.license.photo = remoteCar.PhotoUrl;
+            }
+          }
+        });
+      }
+
+      // 2. Update Parts status table
+      if (Array.isArray(cloudData.parts)) {
+        cloudData.parts.forEach(p => {
+          const localCar = fleetData.find(c => String(c.id) === String(p.CarID));
+          if (localCar && localCar.parts) {
+            localCar.parts[p.PartKey] = {
+              name: p.PartName || (localCar.parts[p.PartKey] ? localCar.parts[p.PartKey].name : p.PartKey),
+              cycle: Number(p.CycleKm) || 10000,
+              lastReplacedKm: Number(p.LastReplacedKm) || 0,
+              nextDueKm: Number(p.NextDueKm) || (Number(p.CycleKm) || 10000)
+            };
+          }
+        });
+      }
+
+      // 3. Update Maintenance logs
+      if (Array.isArray(cloudData.maintenance)) {
+        fleetData.forEach(localCar => {
+          if (!Array.isArray(localCar.history)) localCar.history = [];
+          const remoteRecords = cloudData.maintenance.filter(m => String(m.CarID) === String(localCar.id));
+          const remoteIds = new Set(remoteRecords.map(m => String(m.RecordID)));
+
+          // Align local items that were created before cloud response
+          localCar.history.forEach(localItem => {
+            if (!remoteIds.has(String(localItem.recordId))) {
+              const matched = remoteRecords.find(m =>
+                m.Type === localItem.type &&
+                Number(m.ServiceKm) === Number(localItem.km) &&
+                !localCar.history.some(h => String(h.recordId) === String(m.RecordID))
+              );
+              if (matched) {
+                localItem.recordId = matched.RecordID;
+              }
+            }
+          });
+
+          // Sync deletions: remove records with cloud IDs that no longer exist in cloudData
+          localCar.history = localCar.history.filter(localItem => {
+            const isCloudId = /^MNT-[a-f0-9]{8}$/i.test(localItem.recordId);
+            if (isCloudId && !remoteIds.has(String(localItem.recordId))) {
+              return false; // Deleted from sheet
+            }
+            return true;
+          });
+
+          // Add any new cloud records missing locally
+          remoteRecords.forEach(m => {
+            const exists = localCar.history.some(h => String(h.recordId) === String(m.RecordID));
+            if (!exists) {
+              let partKey = null;
+              if (localCar.parts) {
+                for (let [k, p] of Object.entries(localCar.parts)) {
+                  if (m.Type.includes(p.name) || p.name.includes(m.Type)) {
+                    partKey = k;
+                    break;
+                  }
+                }
+              }
+              localCar.history.push({
+                recordId: m.RecordID,
+                partKey: partKey,
+                type: m.Type,
+                km: Number(m.ServiceKm),
+                nextKm: Number(m.NextKm),
+                cycleKm: Number(m.CycleKm),
+                timingStatus: m.TimingStatus,
+                earlyByKm: Number(m.EarlyByKm) || 0,
+                earlyReason: m.EarlyReason || '',
+                date: m.Date
+              });
+            }
+          });
+        });
+      }
+
+      // 4. Update Fuel logs
+      if (Array.isArray(cloudData.fuelLogs)) {
+        fleetData.forEach(localCar => {
+          if (!Array.isArray(localCar.fuelLogs)) localCar.fuelLogs = [];
+          const remoteFuel = cloudData.fuelLogs.filter(f => String(f.CarID) === String(localCar.id));
+          const remoteIds = new Set(remoteFuel.map(f => String(f.RecordID)));
+
+          // Align local items
+          localCar.fuelLogs.forEach(localLog => {
+            if (!remoteIds.has(String(localLog.recordId))) {
+              const matched = remoteFuel.find(f =>
+                (f.Month === localLog.month || String(f.Distance) === String(localLog.distance)) &&
+                !localCar.fuelLogs.some(fl => String(fl.recordId) === String(f.RecordID))
+              );
+              if (matched) {
+                localLog.recordId = matched.RecordID;
+              }
+            }
+          });
+
+          // Sync deletions: remove records with cloud IDs that no longer exist in cloudData
+          localCar.fuelLogs = localCar.fuelLogs.filter(localLog => {
+            const isCloudId = /^FUEL-[a-f0-9]{8}$/i.test(localLog.recordId);
+            if (isCloudId && !remoteIds.has(String(localLog.recordId))) {
+              return false; // Deleted from sheet
+            }
+            return true;
+          });
+
+          // Add any new cloud records missing locally
+          remoteFuel.forEach(f => {
+            const exists = localCar.fuelLogs.some(fl => String(fl.recordId) === String(f.RecordID));
+            if (!exists) {
+              const rate = Number(f.RatePer100Km) || 0;
+              let statusClass = 'fair';
+              if (rate < 8.5) statusClass = 'good';
+              else if (rate <= 11.5) statusClass = 'fair';
+              else if (rate <= 14) statusClass = 'elevated';
+              else statusClass = 'high';
+
+              localCar.fuelLogs.push({
+                recordId: f.RecordID,
+                month: f.Month,
+                startKm: Number(f.StartKm),
+                endKm: Number(f.EndKm),
+                distance: Number(f.Distance),
+                liters: Number(f.Liters),
+                ratePer100Km: f.RatePer100Km,
+                kmPerLiter: f.KmPerLiter,
+                statusText: f.StatusText,
+                statusClass: statusClass,
+                date: f.Date
+              });
+            }
+          });
+        });
+      }
+
+      persistLocal();
+    }
+
+    function getLicenseAlarm(car) {
+      if (!car.license || !car.license.expiryDate) return { type: 'normal', text: '', days: null };
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const exp = new Date(car.license.expiryDate);
+      exp.setHours(0, 0, 0, 0);
+
+      const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        return { type: 'dang', text: '🚨 رخصة منتهية!', days: diffDays };
+      } else if (diffDays <= 30) {
+        return { type: 'warn', text: `⚠️ رخصة تنتهي بعد ${diffDays} يوم`, days: diffDays };
+      }
+      return { type: 'normal', text: `سارية (متبقي ${diffDays} يوم)`, days: diffDays };
+    }
+
+    function getMostUrgentPart(car) {
+      let mostUrgent = null;
+      let minRemaining = Infinity;
+
+      Object.values(car.parts).forEach(part => {
+        const remaining = part.nextDueKm - car.currentKm;
+        if (remaining < minRemaining) {
+          minRemaining = remaining;
+          mostUrgent = { ...part, remaining };
+        }
+      });
+
+      return mostUrgent;
+    }
+
+    function getCarOverallAlarm(car) {
+      const licAlarm = getLicenseAlarm(car);
+      if (licAlarm.type === 'dang') return { type: 'dang', text: licAlarm.text };
+
+      const urgentPart = getMostUrgentPart(car);
+      if (urgentPart && urgentPart.remaining <= 0) {
+        return { type: 'dang', text: `🚨 صيانة: ${urgentPart.name}` };
+      }
+
+      if (licAlarm.type === 'warn') return { type: 'warn', text: licAlarm.text };
+
+      if (urgentPart && urgentPart.remaining <= ALERT_THRESHOLD) {
+        return { type: 'warn', text: `⚠️ ${urgentPart.name} (${urgentPart.remaining} كم)` };
+      }
+
+      return { type: 'normal', text: '' };
+    }
+
+    function renderButtons() {
+      const container = document.getElementById('fleetButtons');
+      container.innerHTML = '';
+
+      fleetData.forEach(car => {
+        const alarm = getCarOverallAlarm(car);
+        const card = document.createElement('div');
+
+        let alarmClass = '';
+        if (alarm.type === 'dang') alarmClass = 'alarm-danger';
+        else if (alarm.type === 'warn') alarmClass = 'alarm-warning';
+
+        card.className = `car-card ${car.id === selectedCarId ? 'active' : ''} ${alarmClass}`;
+        card.onclick = () => {
+          selectedCarId = car.id;
+          renderButtons();
+          renderDashboard();
+        };
+
+        card.innerHTML = `
+        <div class="card-top">
+          <span class="car-name">${car.name}</span>
+          ${alarm.type !== 'normal' ? `<span class="badge-alarm ${alarm.type}">${alarm.text}</span>` : ''}
+        </div>
+        <div class="car-km-text">
+          <span>العداد:</span>
+          <strong>${Number(car.currentKm).toLocaleString()} كم</strong>
+        </div>
+      `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderDashboard() {
+      const car = fleetData.find(c => c.id === selectedCarId);
+      if (!car) return;
+
+      if (!car.parts) car.parts = createDefaultPartsTracker();
+      if (!car.fuelLogs) car.fuelLogs = [];
+      if (!car.license) car.license = { plate: "", driver: "", chassis: "", motor: "", expiryDate: "", photo: "" };
+
+      document.getElementById('currentCarTitle').innerText = `مركبة: ${car.name}`;
+      document.getElementById('liveKmInput').value = car.currentKm;
+      document.getElementById('serviceKm').value = car.currentKm;
+      calculateNextDueKm();
+      checkEarlyServiceLive();
+
+      renderLicenseInfo(car);
+      renderPartsGrid(car);
+      renderHistoryTable(car);
+      renderFuelTable(car);
+    }
+
+    function renderLicenseInfo(car) {
+      const lic = car.license;
+      document.getElementById('dispPlate').innerText = lic.plate || 'غير مسجل';
+      document.getElementById('dispDriver').innerText = lic.driver || 'غير مسجل';
+      document.getElementById('dispChassis').innerText = lic.chassis || 'غير مسجل';
+      document.getElementById('dispMotor').innerText = lic.motor || 'غير مسجل';
+      document.getElementById('dispExpiry').innerText = lic.expiryDate || 'غير مسجل';
+
+      document.getElementById('inpPlate').value = lic.plate || '';
+      document.getElementById('inpDriver').value = lic.driver || '';
+      document.getElementById('inpChassis').value = lic.chassis || '';
+      document.getElementById('inpMotor').value = lic.motor || '';
+      document.getElementById('inpExpiry').value = lic.expiryDate || '';
+
+      const licAlarm = getLicenseAlarm(car);
+      const badge = document.getElementById('licenseStatusBadge');
+      if (licAlarm.type === 'dang') {
+        badge.className = 'timing-badge overdue';
+        badge.innerText = `🚨 منتهية منذ ${Math.abs(licAlarm.days)} يوم!`;
+      } else if (licAlarm.type === 'warn') {
+        badge.className = 'timing-badge early';
+        badge.innerText = `⚠️ تنتهي قريباً (متبقي ${licAlarm.days} يوم)`;
+      } else if (licAlarm.days !== null) {
+        badge.className = 'timing-badge on-time';
+        badge.innerText = `✔️ سارية (متبقي ${licAlarm.days} يوم)`;
+      } else {
+        badge.className = 'timing-badge on-time';
+        badge.innerText = 'لم يتم تحديد تاريخ بعد';
+      }
+
+      const imgPreview = document.getElementById('licenseImgPreview');
+      const prompt = document.getElementById('licenseUploadPrompt');
+      const photoActions = document.getElementById('photoActionsBar');
+
+      if (lic.photo) {
+        imgPreview.src = lic.photo;
+        imgPreview.style.display = 'block';
+        prompt.style.display = 'none';
+        photoActions.style.display = 'flex';
+      } else {
+        imgPreview.style.display = 'none';
+        prompt.style.display = 'block';
+        photoActions.style.display = 'none';
+      }
+    }
+
+    function toggleLicenseEdit() {
+      const el = document.getElementById('licenseEditFormContainer');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function handleLicenseImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (file.size > 3 * 1024 * 1024) {
+        return alert('حجم الصورة كبير جداً! يرجى اختيار صورة أقل من 3 ميجابايت.');
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function (e) {
+        const base64Img = e.target.result;
+        const car = fleetData.find(c => c.id === selectedCarId);
+        car.license.photo = base64Img;
+        persistLocal();
+        renderLicenseInfo(car);
+        showToast('جاري قراءة صورة الرخصة واستخراج البيانات...');
+
+        try {
+          if (window.Tesseract) {
+            const result = await Tesseract.recognize(base64Img, 'ara+eng');
+            const text = result.data.text;
+            parseLicenseTextAndFill(text, car);
+          }
+        } catch (err) {
+          console.warn('OCR extraction error:', err);
+        } finally {
+          persistLocal();
+          renderButtons();
+          renderDashboard();
+
+          // Sync license updates to cloud
+          postToGoogleScript({
+            action: "updateLicense",
+            carId: car.id,
+            plate: car.license.plate,
+            driver: car.license.driver,
+            chassis: car.license.chassis,
+            motor: car.license.motor,
+            expiryDate: car.license.expiryDate,
+            photoUrl: base64Img
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function parseLicenseTextAndFill(rawText, car) {
+      const text = rawText.replace(/[\r\n]+/g, ' ');
+
+      const dateMatch = text.match(/\b(202[4-9]|203[0-9])[\/\-\.](0?[1-9]|1[0-2])[\/\-\.](0?[1-9]|[12][0-9]|3[01])\b/) ||
+        text.match(/\b(0?[1-9]|[12][0-9]|3[01])[\/\-\.](0?[1-9]|1[0-2])[\/\-\.](202[4-9]|203[0-9])\b/);
+
+      if (dateMatch) {
+        let year, month, day;
+        if (dateMatch[1].length === 4) {
+          year = dateMatch[1]; month = String(dateMatch[2]).padStart(2, '0'); day = String(dateMatch[3]).padStart(2, '0');
+        } else {
+          year = dateMatch[3]; month = String(dateMatch[2]).padStart(2, '0'); day = String(dateMatch[1]).padStart(2, '0');
+        }
+        car.license.expiryDate = `${year}-${month}-${day}`;
+      }
+
+      const chassisMatch = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/i) || text.match(/شاسيه[:\s]*([A-Z0-9]+)/i);
+      if (chassisMatch) car.license.chassis = chassisMatch[1].toUpperCase();
+
+      const motorMatch = text.match(/موتور[:\s]*([A-Z0-9]+)/i) || text.match(/محرك[:\s]*([A-Z0-9]+)/i);
+      if (motorMatch) car.license.motor = motorMatch[1].toUpperCase();
+
+      const plateMatch = text.match(/لوحة[:\s]*([^\s]+[\s]+[0-9]+)/i) || text.match(/رقم[:\s]*([^\s]+[\s]+[0-9]+)/i);
+      if (plateMatch) car.license.plate = plateMatch[1];
+    }
+
+    function saveLicenseDetails() {
+      const car = fleetData.find(c => c.id === selectedCarId);
+      car.license.plate = document.getElementById('inpPlate').value.trim();
+      car.license.driver = document.getElementById('inpDriver').value.trim();
+      car.license.chassis = document.getElementById('inpChassis').value.trim();
+      car.license.motor = document.getElementById('inpMotor').value.trim();
+      car.license.expiryDate = document.getElementById('inpExpiry').value;
+
+      persistLocal();
+      renderButtons();
+      renderLicenseInfo(car);
+      toggleLicenseEdit();
+      showToast('تم حفظ بيانات الرخصة بنجاح');
+
+      postToGoogleScript({
+        action: "updateLicense",
+        carId: car.id,
+        plate: car.license.plate,
+        driver: car.license.driver,
+        chassis: car.license.chassis,
+        motor: car.license.motor,
+        expiryDate: car.license.expiryDate
+      });
+    }
+
+    function deleteLicenseImage() {
+      if (!confirm('هل تريد بالتأكيد حذف صورة الرخصة المرفوعة؟')) return;
+      const car = fleetData.find(c => c.id === selectedCarId);
+      car.license.photo = "";
+      persistLocal();
+      renderLicenseInfo(car);
+      showToast('تم حذف صورة الرخصة');
+
+      postToGoogleScript({
+        action: "updateLicense",
+        carId: car.id,
+        plate: car.license.plate,
+        driver: car.license.driver,
+        chassis: car.license.chassis,
+        motor: car.license.motor,
+        expiryDate: car.license.expiryDate,
+        photoUrl: ""
+      });
+    }
+
+    function clearLicenseData() {
+      if (!confirm('هل تريد مسح جميع بيانات رخصة هذه المركبة؟')) return;
+      const car = fleetData.find(c => c.id === selectedCarId);
+      car.license = { plate: "", driver: "", chassis: "", motor: "", expiryDate: "", photo: "" };
+      persistLocal();
+      renderButtons();
+      renderDashboard();
+      showToast('تم تفريغ بيانات الرخصة');
+
+      postToGoogleScript({
+        action: "updateLicense",
+        carId: car.id,
+        plate: "", driver: "", chassis: "", motor: "", expiryDate: "", photoUrl: ""
+      });
+    }
+
+    function renderPartsGrid(car) {
+      const partsContainer = document.getElementById('partsGrid');
+      partsContainer.innerHTML = '';
+
+      Object.entries(car.parts).forEach(([key, part]) => {
+        const remaining = part.nextDueKm - car.currentKm;
+        const usedInCycle = Math.max(0, car.currentKm - (part.lastReplacedKm || 0));
+        const pct = Math.min(100, Math.max(0, (usedInCycle / part.cycle) * 100));
+
+        let badgeColor = 'var(--success)';
+        let badgeText = `باقي ${remaining.toLocaleString()} كم`;
+        let cardClass = '';
+        let barColor = 'var(--success)';
+
+        if (remaining <= 0) {
+          badgeColor = 'var(--danger)';
+          badgeText = `متأخر بـ ${Math.abs(remaining).toLocaleString()} كم!`;
+          cardClass = 'overdue';
+          barColor = 'var(--danger)';
+        } else if (remaining <= ALERT_THRESHOLD) {
+          badgeColor = 'var(--warning)';
+          badgeText = `اقترب الموعد (${remaining} كم)`;
+          cardClass = 'due-soon';
+          barColor = 'var(--warning)';
+        }
+
+        const card = document.createElement('div');
+        card.className = `part-track-card ${cardClass}`;
+        card.innerHTML = `
+        <div class="part-header">
+          <span class="part-name">${part.name}</span>
+          <span class="part-badge" style="color: ${badgeColor};">${badgeText}</span>
+        </div>
+        <div class="part-progress-bg">
+          <div class="part-progress-fill" style="width: ${pct}%; background-color: ${barColor};"></div>
+        </div>
+        <div class="part-footer">
+          <span>آخر استبدال: ${Number(part.lastReplacedKm || 0).toLocaleString()} كم</span>
+          <span>الاستحقاق: ${Number(part.nextDueKm).toLocaleString()} كم</span>
+        </div>
+      `;
+        partsContainer.appendChild(card);
+      });
+    }
+
+    function renderHistoryTable(car) {
+      const tbody = document.getElementById('historyTableBody');
+      const emptyMsg = document.getElementById('emptyTableMsg');
+      tbody.innerHTML = '';
+
+      if (!car.history || car.history.length === 0) {
+        emptyMsg.style.display = 'block';
+      } else {
+        emptyMsg.style.display = 'none';
+        car.history.map((item, originalIndex) => ({ item, originalIndex })).reverse().forEach(({ item, originalIndex }) => {
+          let badgeHtml = '';
+          if (item.timingStatus === 'early') {
+            const reasonText = item.earlyReason ? `<span class="early-comment-text">سبب التغيير: "${item.earlyReason}"</span>` : '';
+            badgeHtml = `
+            <span class="timing-badge early">⚠️ مبكرة (قبلها بـ ${item.earlyByKm.toLocaleString()} كم)</span>
+            ${reasonText}
+          `;
+          } else if (item.timingStatus === 'overdue') {
+            badgeHtml = `<span class="timing-badge overdue">🚨 متأخرة</span>`;
+          } else {
+            badgeHtml = `<span class="timing-badge on-time">✔️ في الموعد</span>`;
+          }
+
+          const row = document.createElement('tr');
+          row.innerHTML = `
+          <td style="font-weight: 700; color: #fff;">${item.type}</td>
+          <td>${item.date}</td>
+          <td>${Number(item.km).toLocaleString()} كم</td>
+          <td>${Number(item.nextKm).toLocaleString()} كم</td>
+          <td>${badgeHtml}</td>
+          <td style="text-align: center;">
+            <button class="btn-delete" title="حذف هذا السجل" onclick="deleteHistoryItem(${originalIndex})">🗑️</button>
+          </td>
+        `;
+          tbody.appendChild(row);
+        });
+      }
+    }
+
+    function renderFuelTable(car) {
+      const tbody = document.getElementById('fuelTableBody');
+      const emptyMsg = document.getElementById('emptyFuelMsg');
+      tbody.innerHTML = '';
+
+      if (!car.fuelLogs || car.fuelLogs.length === 0) {
+        emptyMsg.style.display = 'block';
+      } else {
+        emptyMsg.style.display = 'none';
+        car.fuelLogs.map((log, idx) => ({ log, idx })).reverse().forEach(({ log, idx }) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+          <td style="font-weight: 700;">${log.month}</td>
+          <td>${log.distance.toLocaleString()} كم</td>
+          <td>${log.liters.toLocaleString()} لتر</td>
+          <td style="font-weight: bold; color: var(--jushi-cyan);">${log.ratePer100Km} <small>لتر/100كم</small></td>
+          <td><span class="consumption-badge ${log.statusClass || 'fair'}">${log.statusText}</span></td>
+          <td style="text-align: center;">
+            <button class="btn-delete" title="حذف هذا الشهر" onclick="deleteFuelLog(${idx})">🗑️</button>
+          </td>
+        `;
+          tbody.appendChild(row);
+        });
+      }
+    }
+
+    function onMaintenanceTypeChange() {
+      const text = document.getElementById('maintName').value;
+      const cycleInput = document.getElementById('serviceCycleKm');
+
+      for (let rule of DEFAULT_PARTS) {
+        if (text.includes(rule.name) || rule.name.includes(text)) {
+          cycleInput.value = rule.cycle;
+          calculateNextDueKm();
+          return;
+        }
+      }
+    }
+
+    function calculateNextDueKm() {
+      const km = parseInt(document.getElementById('serviceKm').value, 10);
+      const cycle = parseInt(document.getElementById('serviceCycleKm').value, 10);
+      const nextInput = document.getElementById('nextServiceKm');
+      if (!isNaN(km) && !isNaN(cycle) && km >= 0 && cycle > 0) {
+        nextInput.value = km + cycle;
+      } else {
+        nextInput.value = '';
+      }
+    }
+
+    function checkEarlyServiceLive() {
+      const type = document.getElementById('maintName').value.trim();
+      const currentKm = parseInt(document.getElementById('serviceKm').value, 10);
+      const box = document.getElementById('earlyReasonBox');
+      const label = document.getElementById('earlyReasonLabel');
+
+      if (!type || isNaN(currentKm)) {
+        box.style.display = 'none';
+        return;
+      }
+
+      const car = fleetData.find(c => c.id === selectedCarId);
+      if (!car) return;
+
+      let matchedKey = null;
+      for (let [k, p] of Object.entries(car.parts)) {
+        if (type.includes(p.name) || p.name.includes(type)) {
+          matchedKey = k;
+          break;
+        }
+      }
+
+      if (matchedKey && car.parts[matchedKey]) {
+        const part = car.parts[matchedKey];
+        const remainingKm = part.nextDueKm - currentKm;
+
+        if (remainingKm > 1000) {
+          box.style.display = 'flex';
+          label.innerText = `⚠️ صيانة مبكرة اضطرارية (قبل موعدها بـ ${remainingKm.toLocaleString()} كم) - اذكر سبب التغيير الآن:`;
+        } else {
+          box.style.display = 'none';
+        }
+      } else {
+        box.style.display = 'none';
+      }
+    }
+
+    function updateMileageDirectly() {
+      const input = document.getElementById('liveKmInput');
+      const val = parseInt(input.value, 10);
+      if (isNaN(val) || val < 0) return alert('يرجى إدخال رقم عداد صحيح');
+
+      const car = fleetData.find(c => c.id === selectedCarId);
+      car.currentKm = val;
+      persistLocal();
+      renderButtons();
+      renderDashboard();
+      showToast(`تم تحديث عداد ${car.name} إلى ${val.toLocaleString()} كم`);
+
+      postToGoogleScript({
+        action: "updateMileage",
+        carId: car.id,
+        currentKm: val
+      });
+    }
+
+    // Registering maintenance and dispatching to cloud
+    document.getElementById('logMaintForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const type = document.getElementById('maintName').value.trim();
+      const km = parseInt(document.getElementById('serviceKm').value, 10);
+      const cycle = parseInt(document.getElementById('serviceCycleKm').value, 10);
+      const nextKm = km + cycle;
+      const earlyReason = document.getElementById('earlyReasonInput').value.trim();
+
+      const car = fleetData.find(c => c.id === selectedCarId);
+      car.currentKm = Math.max(car.currentKm, km);
+
+      let matchedKey = null;
+      for (let [k, p] of Object.entries(car.parts)) {
+        if (type.includes(p.name) || p.name.includes(type)) {
+          matchedKey = k;
+          break;
+        }
+      }
+
+      if (!matchedKey) {
+        matchedKey = 'custom_' + Date.now();
+        car.parts[matchedKey] = {
+          name: type,
+          cycle: cycle,
+          lastReplacedKm: 0,
+          nextDueKm: cycle
+        };
+      }
+
+      const existingPart = car.parts[matchedKey];
+      const prevTargetKm = existingPart.nextDueKm;
+      const remainingKmBeforeService = prevTargetKm - km;
+
+      let timingStatus = 'on-time';
+      let earlyByKm = 0;
+
+      if (remainingKmBeforeService > 1000) {
+        timingStatus = 'early';
+        earlyByKm = remainingKmBeforeService;
+
+        const confirmMsg = `⚠️ تنبيه صيانة مبكرة:\nالقطعة (${type}) كان موعدها عند ${prevTargetKm.toLocaleString()} كم.\nيتم استبدالها الآن قبل موعدها بـ ${earlyByKm.toLocaleString()} كم.\n\nهل تريد المتابعة كصيانة اضطرارية مبكرة؟`;
+        if (!confirm(confirmMsg)) return;
+      } else if (remainingKmBeforeService < 0) {
+        timingStatus = 'overdue';
+      }
+
+      car.parts[matchedKey] = {
+        name: type,
+        cycle: cycle,
+        lastReplacedKm: km,
+        nextDueKm: nextKm
+      };
+
+      const recordId = "MNT-" + Date.now();
+      const formattedDate = new Date().toLocaleDateString('ar-EG');
+
+      const newHistoryItem = {
+        recordId,
+        partKey: matchedKey,
+        type,
+        km,
+        nextKm,
+        cycleKm: cycle,
+        timingStatus,
+        earlyByKm,
+        earlyReason: timingStatus === 'early' ? earlyReason : '',
+        date: formattedDate
+      };
+      car.history.push(newHistoryItem);
+
+      persistLocal();
+      renderButtons();
+      renderDashboard();
+
+      document.getElementById('maintName').value = '';
+      document.getElementById('earlyReasonInput').value = '';
+      document.getElementById('earlyReasonBox').style.display = 'none';
+      showToast(`تم تسجيل صيانة ${type}، جاري المزامنة مع السحابة...`);
+
+      const res = await postToGoogleScript({
+        action: "logMaintenance",
+        carId: car.id,
+        carName: car.name,
+        type: type,
+        serviceKm: km,
+        nextKm: nextKm,
+        cycleKm: cycle,
+        timingStatus: timingStatus,
+        earlyByKm: earlyByKm,
+        earlyReason: timingStatus === 'early' ? earlyReason : '',
+        date: formattedDate
+      });
+
+      if (res && res.status === 'success' && res.recordId) {
+        newHistoryItem.recordId = res.recordId;
+        persistLocal();
+        showToast(`تم حفظ صيانة ${type} في Google Sheets بنجاح ✔️`);
+      }
+    });
+
+    async function deleteHistoryItem(index) {
+      if (!confirm('هل أنت متأكد من حذف سجل هذه الصيانة؟')) return;
+
+      const car = fleetData.find(c => c.id === selectedCarId);
+      if (!car || !car.history || index < 0 || index >= car.history.length) return;
+
+      const removedItem = car.history.splice(index, 1)[0];
+
+      let partKey = removedItem.partKey;
+      if (!partKey && car.parts) {
+        for (let [k, p] of Object.entries(car.parts)) {
+          if (removedItem.type.includes(p.name) || p.name.includes(removedItem.type)) {
+            partKey = k;
+            break;
+          }
+        }
+      }
+
+      if (partKey && car.parts[partKey]) {
+        const remainingForThisPart = car.history.filter(h => h.partKey === partKey || h.type === car.parts[partKey].name);
+        if (remainingForThisPart.length > 0) {
+          const lastRecord = remainingForThisPart[remainingForThisPart.length - 1];
+          car.parts[partKey].lastReplacedKm = lastRecord.km;
+          car.parts[partKey].nextDueKm = lastRecord.nextKm;
+        } else {
+          const defaultRule = DEFAULT_PARTS.find(p => p.name === car.parts[partKey].name);
+          const cycle = defaultRule ? defaultRule.cycle : 10000;
+          car.parts[partKey].lastReplacedKm = 0;
+          car.parts[partKey].nextDueKm = cycle;
+        }
+      }
+
+      persistLocal();
+      renderButtons();
+      renderDashboard();
+      showToast('جاري حذف سجل الصيانة من Google Sheets...');
+
+      let targetRecordId = removedItem.recordId;
+
+      // Check if recordId looks like a local timestamp or not standard cloud ID
+      if (!targetRecordId || /^MNT-\d+$/.test(targetRecordId)) {
+        if (window._latestCloudData && Array.isArray(window._latestCloudData.maintenance)) {
+          const matched = window._latestCloudData.maintenance.find(m =>
+            String(m.CarID) === String(car.id) &&
+            m.Type === removedItem.type &&
+            Number(m.ServiceKm) === Number(removedItem.km)
+          );
+          if (matched && matched.RecordID) {
+            targetRecordId = matched.RecordID;
+          }
+        }
+      }
+
+      let deleteSuccess = false;
+
+      if (targetRecordId) {
+        const res = await postToGoogleScript({
+          action: "deleteMaintenance",
+          recordId: targetRecordId
+        });
+        if (res && res.status === 'success') {
+          deleteSuccess = true;
+        }
+      }
+
+      // Fallback search against live sheet if not successful
+      if (!deleteSuccess) {
+        try {
+          const resp = await fetch(`${SCRIPT_URL}?action=getAll&_ts=${Date.now()}`);
+          const resJson = await resp.json();
+          if (resJson && resJson.status === 'success' && resJson.data && Array.isArray(resJson.data.maintenance)) {
+            window._latestCloudData = resJson.data;
+            const orphan = resJson.data.maintenance.find(m =>
+              String(m.CarID) === String(car.id) &&
+              m.Type === removedItem.type &&
+              Number(m.ServiceKm) === Number(removedItem.km)
+            );
+            if (orphan && orphan.RecordID) {
+              const retryRes = await postToGoogleScript({
+                action: "deleteMaintenance",
+                recordId: orphan.RecordID
+              });
+              if (retryRes && retryRes.status === 'success') {
+                deleteSuccess = true;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Fallback delete maintenance error:', err);
+        }
+      }
+
+      if (deleteSuccess) {
+        showToast('تم حذف سجل الصيانة من Google Sheets بنجاح ✔️');
+        fetchLiveGoogleSheetData(false);
+      } else {
+        showToast('تم الحذف محلياً (السجل غير موجود في Google Sheets)', 'warning');
+      }
+    }
+
+    async function logFuelConsumption() {
+      const month = document.getElementById('fuelMonth').value;
+      const startKm = parseInt(document.getElementById('fuelStartKm').value, 10);
+      const endKm = parseInt(document.getElementById('fuelEndKm').value, 10);
+      const liters = parseFloat(document.getElementById('fuelLiters').value);
+
+      if (!month) return alert('يرجى تحديد الشهر والسنة');
+      if (isNaN(startKm) || isNaN(endKm) || endKm <= startKm) {
+        return alert('قراءة عداد آخر الشهر يجب أن تكون أكبر من عداد أول الشهر!');
+      }
+      if (isNaN(liters) || liters <= 0) return alert('يرجى كتابة كمية اللترات بشكل صحيح');
+
+      const distance = endKm - startKm;
+      const ratePer100Km = ((liters / distance) * 100).toFixed(2);
+      const kmPerLiter = (distance / liters).toFixed(2);
+
+      let statusText = '';
+      let statusClass = '';
+
+      if (ratePer100Km < 8.5) {
+        statusText = `ممتاز (${kmPerLiter} كم/لتر)`;
+        statusClass = 'good';
+      } else if (ratePer100Km <= 11.5) {
+        statusText = `طبيعي معتدل (${kmPerLiter} كم/لتر)`;
+        statusClass = 'fair';
+      } else if (ratePer100Km <= 14) {
+        statusText = `مرتفع يحتاج متابعة (${kmPerLiter} كم/لتر)`;
+        statusClass = 'elevated';
+      } else {
+        statusText = `مفرط جداً! (إهدار أو عطل)`;
+        statusClass = 'high';
+      }
+
+      const car = fleetData.find(c => c.id === selectedCarId);
+      if (!car.fuelLogs) car.fuelLogs = [];
+
+      const recordId = "FUEL-" + Date.now();
+      const formattedDate = new Date().toLocaleDateString('ar-EG');
+
+      const newFuelLog = {
+        recordId,
+        month,
+        startKm,
+        endKm,
+        distance,
+        liters,
+        ratePer100Km,
+        kmPerLiter,
+        statusText,
+        statusClass,
+        date: formattedDate
+      };
+      car.fuelLogs.push(newFuelLog);
+
+      persistLocal();
+      renderFuelTable(car);
+
+      document.getElementById('fuelMonth').value = '';
+      document.getElementById('fuelStartKm').value = '';
+      document.getElementById('fuelEndKm').value = '';
+      document.getElementById('fuelLiters').value = '';
+      showToast('تم تسجيل استهلاك البنزين، جاري المزامنة مع السحابة...');
+
+      const res = await postToGoogleScript({
+        action: "logFuel",
+        carId: car.id,
+        carName: car.name,
+        month,
+        startKm,
+        endKm,
+        distance,
+        liters,
+        ratePer100Km,
+        kmPerLiter,
+        statusText
+      });
+
+      if (res && res.status === 'success' && res.recordId) {
+        newFuelLog.recordId = res.recordId;
+        persistLocal();
+        showToast('تم حفظ استهلاك الوقود في Google Sheets بنجاح ✔️');
+      }
+    }
+
+    async function deleteFuelLog(index) {
+      if (!confirm('هل أنت متأكد من حذف سجل استهلاك هذا الشهر؟')) return;
+      const car = fleetData.find(c => c.id === selectedCarId);
+      if (!car || !car.fuelLogs || index < 0 || index >= car.fuelLogs.length) return;
+
+      const removedItem = car.fuelLogs.splice(index, 1)[0];
+      persistLocal();
+      renderFuelTable(car);
+      showToast('جاري حذف سجل الوقود من Google Sheets...');
+
+      let targetRecordId = removedItem.recordId;
+      if (!targetRecordId || /^FUEL-\d+$/.test(targetRecordId)) {
+        if (window._latestCloudData && Array.isArray(window._latestCloudData.fuelLogs)) {
+          const matched = window._latestCloudData.fuelLogs.find(f =>
+            String(f.CarID) === String(car.id) &&
+            (f.Month === removedItem.month || String(f.Distance) === String(removedItem.distance))
+          );
+          if (matched && matched.RecordID) {
+            targetRecordId = matched.RecordID;
+          }
+        }
+      }
+
+      let deleteSuccess = false;
+
+      if (targetRecordId) {
+        const res = await postToGoogleScript({
+          action: "deleteFuel",
+          recordId: targetRecordId
+        });
+        if (res && res.status === 'success') {
+          deleteSuccess = true;
+        }
+      }
+
+      // Fallback search against live sheet if not successful
+      if (!deleteSuccess) {
+        try {
+          const resp = await fetch(`${SCRIPT_URL}?action=getAll&_ts=${Date.now()}`);
+          const resJson = await resp.json();
+          if (resJson && resJson.status === 'success' && resJson.data && Array.isArray(resJson.data.fuelLogs)) {
+            window._latestCloudData = resJson.data;
+            const orphan = resJson.data.fuelLogs.find(f =>
+              String(f.CarID) === String(car.id) &&
+              (f.Month === removedItem.month || String(f.Distance) === String(removedItem.distance))
+            );
+            if (orphan && orphan.RecordID) {
+              const retryRes = await postToGoogleScript({
+                action: "deleteFuel",
+                recordId: orphan.RecordID
+              });
+              if (retryRes && retryRes.status === 'success') {
+                deleteSuccess = true;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Fallback delete fuel error:', err);
+        }
+      }
+
+      if (deleteSuccess) {
+        showToast('تم حذف سجل الوقود من Google Sheets بنجاح ✔️');
+        fetchLiveGoogleSheetData(false);
+      } else {
+        showToast('تم الحذف محلياً (السجل غير موجود في Google Sheets)', 'warning');
+      }
+    }
+
+    function exportCarDataToExcel() {
+      const car = fleetData.find(c => c.id === selectedCarId);
+      if (!car) return alert('المركبة غير محددة');
+
+      const wb = XLSX.utils.book_new();
+
+      // 1. Overview Sheet
+      const licAlarm = getLicenseAlarm(car);
+      const summaryData = [
+        ["تقرير الحالة الفنية الشامل لمركبة - شركة جوشي مصر"],
+        ["تاريخ استخراج التقرير:", new Date().toLocaleDateString('ar-EG')],
+        [],
+        ["بيان المركبة", "القيمة المسجلة"],
+        ["اسم المركبة في الأسطول", car.name],
+        ["العداد الفعلي المسجل", `${car.currentKm} كم`],
+        ["رقم اللوحة المعدنية", car.license.plate || "غير مسجل"],
+        ["السائق المسؤول", car.license.driver || "غير مسجل"],
+        ["رقم الشاسيه", car.license.chassis || "غير مسجل"],
+        ["رقم الموتور", car.license.motor || "غير مسجل"],
+        ["تاريخ انتهاء الرخصة", car.license.expiryDate || "غير محدد"],
+        ["حالة سريان الرخصة", licAlarm.text || "سارية"]
+      ];
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, wsSummary, "بيانات المركبة والرخصة");
+
+      // 2. Parts Status Sheet
+      const partsRows = [
+        ["القطعة / بند الصيانة", "الدورة المعتمدة (كم)", "العداد عند آخر استبدال", "الاستحقاق القادم (كم)", "المتبقي للاستهلاك", "الحالة الفنية"]
+      ];
+      Object.values(car.parts).forEach(p => {
+        const remaining = p.nextDueKm - car.currentKm;
+        let status = "حالة ممتازة";
+        if (remaining <= 0) status = "مستحقة فوراً (متأخرة)";
+        else if (remaining <= ALERT_THRESHOLD) status = "اقترب موعد الاستبدال";
+
+        partsRows.push([
+          p.name,
+          p.cycle,
+          p.lastReplacedKm || 0,
+          p.nextDueKm,
+          remaining > 0 ? remaining : `متأخر بـ ${Math.abs(remaining)} كم`,
+          status
+        ]);
+      });
+      const wsParts = XLSX.utils.aoa_to_sheet(partsRows);
+      XLSX.utils.book_append_sheet(wb, wsParts, "حالة قطع الغيار");
+
+      // 3. Maintenance History Sheet with Reason
+      const historyRows = [
+        ["م", "نوع الصيانة / القطعة", "التاريخ", "العداد وقت التنفيذ (كم)", "الاستحقاق التالي (كم)", "التوقيت الفني", "سبب التغيير المبكر (إن وُجد)"]
+      ];
+      if (car.history && car.history.length > 0) {
+        car.history.forEach((h, i) => {
+          let timing = "في الموعد المحدد";
+          if (h.timingStatus === 'early') timing = `صيانة مبكرة اضطرارية (قبلها بـ ${h.earlyByKm.toLocaleString()} كم)`;
+          else if (h.timingStatus === 'overdue') timing = "صيانة متأخرة";
+
+          historyRows.push([
+            i + 1,
+            h.type,
+            h.date,
+            h.km,
+            h.nextKm,
+            timing,
+            h.earlyReason || "-"
+          ]);
+        });
+      } else {
+        historyRows.push(["-", "لا توجد سجلات سابقة مسجلة", "-", "-", "-", "-", "-"]);
+      }
+      const wsHistory = XLSX.utils.aoa_to_sheet(historyRows);
+      XLSX.utils.book_append_sheet(wb, wsHistory, "سجل الصيانات الدورية");
+
+      // 4. Fuel Efficiency Sheet
+      const fuelRows = [
+        ["الشهر والسنة", "عداد البداية (كم)", "عداد النهاية (كم)", "المسافة المقطوعة (كم)", "اللترات المستهلكة", "المعدل (لتر/100كم)", "المعدل (كم/لتر)", "التقييم والرقابة"]
+      ];
+      if (car.fuelLogs && car.fuelLogs.length > 0) {
+        car.fuelLogs.forEach(f => {
+          fuelRows.push([
+            f.month,
+            f.startKm,
+            f.endKm,
+            f.distance,
+            f.liters,
+            f.ratePer100Km,
+            f.kmPerLiter,
+            f.statusText
+          ]);
+        });
+      } else {
+        fuelRows.push(["-", "-", "-", "لا توجد بيانات وقود مسجلة", "-", "-", "-", "-"]);
+      }
+      const wsFuel = XLSX.utils.aoa_to_sheet(fuelRows);
+      XLSX.utils.book_append_sheet(wb, wsFuel, "رقابة استهلاك الوقود");
+
+      const fileName = `تقرير_صيانة_جوشي_${car.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      showToast('تم تصدير ملف الإكسيل بنجاح');
+    }
+
+    // Setting default month and launching
+    const now = new Date();
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('fuelMonth').value = currentMonthStr;
+
+    // Initialize view and perform live cloud fetch on boot
+    renderButtons();
+    renderDashboard();
+    fetchLiveGoogleSheetData(false);
+  </script>
+
+</body>
+
+</html>
