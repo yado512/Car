@@ -87,6 +87,26 @@ if (!isset($allowedMimes[$mimeType])) {
     exit;
 }
 
+// 1. التحقق الفعلي من محتوى الصورة الثنائي (يمنع تماماً رفع أي ملفات خبيثة أو سكربتات متنكرة)
+$imageInfo = @getimagesize($file['tmp_name']);
+if ($imageInfo === false) {
+    echo json_encode(['status' => 'error', 'message' => 'الملف ليس صورة حقيقية صالحة. تم رفض العملية لأسباب أمنية.']);
+    exit;
+}
+
+// 2. حماية مجلد uploads تلقائياً بمنع تنفيذ أي سكربتات PHP أو CGI نهائياً
+$htaccessPath = $uploadDir . '.htaccess';
+if (!file_exists($htaccessPath)) {
+    $htaccessRules = "# Security: Disable script execution in uploads directory\n" .
+                     "<FilesMatch \"\.(php|phtml|php[0-9]|phar|pl|py|cgi|sh|bash)$\">\n" .
+                     "    Deny from all\n" .
+                     "</FilesMatch>\n" .
+                     "Options -ExecCGI\n" .
+                     "RemoveHandler .php .phtml .php5 .php7 .phar\n" .
+                     "php_flag engine off\n";
+    @file_put_contents($htaccessPath, $htaccessRules);
+}
+
 $ext = $allowedMimes[$mimeType];
 
 // حذف صور الرخصة القديمة لهذه السيارة لتوفير مساحة السيرفر
