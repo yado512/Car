@@ -1504,10 +1504,8 @@
               const v = remoteCar[remoteKey];
               if (v !== null && v !== undefined) localCar.license[localKey] = String(v);
             });
-            if (remoteCar.PhotoUrl === '') {
-              localCar.license.photo = '';
-            } else if (remoteCar.PhotoUrl && String(remoteCar.PhotoUrl).startsWith('data:image')) {
-              localCar.license.photo = remoteCar.PhotoUrl;
+            if (remoteCar.PhotoUrl && String(remoteCar.PhotoUrl).trim() !== '') {
+              localCar.license.photo = String(remoteCar.PhotoUrl).trim();
             }
           }
         });
@@ -1808,19 +1806,22 @@
       const file = event.target.files[0];
       if (!file) return;
 
-      if (file.size > 3 * 1024 * 1024) {
-        return alert('حجم الصورة كبير جداً! يرجى اختيار صورة أقل من 3 ميجابايت.');
+      if (file.size > 10 * 1024 * 1024) {
+        return alert('حجم الصورة كبير جداً! يرجى اختيار صورة أقل من 10 ميجابايت.');
       }
 
       const reader = new FileReader();
       reader.onload = async function (e) {
         const base64Img = e.target.result;
         const car = fleetData.find(c => c.id === selectedCarId);
+        
+        // Immediate local preview so user sees the image right away
         car.license.photo = base64Img;
         persistLocal();
         renderLicenseInfo(car);
         showToast('جاري قراءة صورة الرخصة واستخراج البيانات...');
 
+        // 1. OCR Extraction (Tesseract)
         try {
           if (window.Tesseract) {
             const result = await Tesseract.recognize(base64Img, 'ara+eng');
@@ -1829,29 +1830,61 @@
           }
         } catch (err) {
           console.warn('OCR extraction error:', err);
-        } finally {
-          persistLocal();
-          renderButtons();
-          renderDashboard();
-
-          // Full resolution stays local; only a cell-sized copy goes to the sheet.
-          const photoForSheet = await compressPhotoForSheet(base64Img);
-          if (!photoForSheet) {
-            showToast('تعذر تصغير صورة الرخصة بما يكفي لحفظها في Google Sheets (محفوظة محلياً فقط)', 'warning');
-          }
-
-          const res = await postToGoogleScript({
-            action: "updateLicense",
-            carId: car.id,
-            plate: car.license.plate,
-            driver: car.license.driver,
-            chassis: car.license.chassis,
-            motor: car.license.motor,
-            expiryDate: car.license.expiryDate,
-            photoUrl: photoForSheet
-          });
-          reportSync(res, 'تم حفظ بيانات الرخصة في Google Sheets ✔️');
         }
+
+        persistLocal();
+        renderButtons();
+        renderDashboard();
+
+        // 2. Upload file directly to upload.php on the server
+        let finalPhotoUrl = '';
+        try {
+          showToast('جاري رفع صورة الرخصة على السيرفر...');
+          const formData = new FormData();
+          formData.append('photo', file);
+          formData.append('carId', car.id);
+
+          const upResp = await fetch('upload.php', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (upResp.ok) {
+            const upResult = await upResp.json();
+            if (upResult && upResult.status === 'success' && upResult.url) {
+              finalPhotoUrl = upResult.url;
+              car.license.photo = upResult.url;
+              persistLocal();
+              renderLicenseInfo(car);
+              showToast('تم حفظ الصورة بنجاح على السيرفر ✔️');
+            } else {
+              console.warn('upload.php error:', upResult);
+              showToast(upResult.message || 'تعذر حفظ الصورة على السيرفر', 'warning');
+            }
+          } else {
+            console.warn('upload.php HTTP error:', upResp.status);
+          }
+        } catch (upErr) {
+          console.warn('Server upload not reachable (e.g. running offline):', upErr);
+        }
+
+        // Fallback to compressed base64 only if server upload failed completely
+        if (!finalPhotoUrl) {
+          finalPhotoUrl = await compressPhotoForSheet(base64Img);
+        }
+
+        // 3. Save to Google Sheets with the server URL (or fallback)
+        const res = await postToGoogleScript({
+          action: "updateLicense",
+          carId: car.id,
+          plate: car.license.plate,
+          driver: car.license.driver,
+          chassis: car.license.chassis,
+          motor: car.license.motor,
+          expiryDate: car.license.expiryDate,
+          photoUrl: finalPhotoUrl || ''
+        });
+        reportSync(res, 'تم حفظ بيانات ورابط الرخصة في Google Sheets ✔️');
       };
       reader.readAsDataURL(file);
     }
@@ -1895,8 +1928,11 @@
       renderLicenseInfo(car);
       toggleLicenseEdit();
 
-      // photoUrl is sent back unchanged: omitting it let a server-side write of
-      // `data.photoUrl || ''` blank out the stored image.
+      let photoToSend = car.license.photo || '';
+      if (photoToSend.startsWith('data:image')) {
+        photoToSend = await compressPhotoForSheet(photoToSend);
+      }
+
       const res = await postToGoogleScript({
         action: "updateLicense",
         carId: car.id,
@@ -1905,7 +1941,7 @@
         chassis: car.license.chassis,
         motor: car.license.motor,
         expiryDate: car.license.expiryDate,
-        photoUrl: await compressPhotoForSheet(car.license.photo || '')
+        photoUrl: photoToSend
       });
       reportSync(res, 'تم حفظ بيانات الرخصة بنجاح');
     }
@@ -1916,6 +1952,15 @@
       car.license.photo = "";
       persistLocal();
       renderLicenseInfo(car);
+
+      // Delete from server if upload.php is available
+      try {
+        const formData = new FormData();
+        formData.append('action', 'delete');
+        formData.append('carId', car.id);
+        fetch('upload.php', { method: 'POST', body: formData }).catch(() => {});
+      } catch (e) {}
+
       const res = await postToGoogleScript({
         action: "updateLicense",
         carId: car.id,
@@ -1936,6 +1981,15 @@
       persistLocal();
       renderButtons();
       renderDashboard();
+
+      // Delete from server
+      try {
+        const formData = new FormData();
+        formData.append('action', 'delete');
+        formData.append('carId', car.id);
+        fetch('upload.php', { method: 'POST', body: formData }).catch(() => {});
+      } catch (e) {}
+
       const res = await postToGoogleScript({
         action: "updateLicense",
         carId: car.id,
