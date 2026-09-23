@@ -939,6 +939,10 @@
       border-color: var(--danger);
     }
 
+    .toast-box.warning {
+      border-color: var(--warning);
+    }
+
     @keyframes slide-up {
       from {
         transform: translateY(20px);
@@ -1232,6 +1236,12 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby8LGLIh_UQbVQhC4TLFKNovcOg7pPEvsC44gyN9T0lkwhkNeVUmrLFZVGFUrSh5e7HGw/exec";
     const ALERT_THRESHOLD = 1000;
 
+    // The server exposes an "updatePart" action, but its expected field names are not
+    // confirmed against the Apps Script source. Until they are, deleting a maintenance
+    // record rolls the part back locally only — the Parts sheet keeps the old due-km.
+    // Set this to true once the names below are verified, or the call may write blanks.
+    const ENABLE_PART_ROLLBACK = false;
+
     // Parts list with cycles
     const DEFAULT_PARTS = [
       { key: "engine_oil_filter", name: "زيت المحرك وفلتر الزيت", cycle: 10000 },
@@ -1360,14 +1370,115 @@
           redirect: 'follow'
         });
 
+        if (!response.ok) {
+          throw new Error('HTTP Error: ' + response.status);
+        }
+
         const result = await response.json();
+
+        // A 200 response can still carry a server-side failure. Do not claim success for it.
+        if (!result || result.status !== 'success') {
+          const msg = (result && result.message) ? result.message : 'استجابة غير متوقعة من الخادم';
+          console.warn('Server rejected action "' + payload.action + '":', msg);
+          setCloudStatus('offline', 'تم الحفظ محلياً (رفض الخادم: ' + msg + ')');
+          return result || { status: 'error', message: msg };
+        }
+
         setCloudStatus('', '🟢 متصل بالسحابة (Google Sheets)');
         return result;
       } catch (err) {
         console.warn('POST sync error (fallback active):', err);
         setCloudStatus('offline', 'تم الحفظ محلياً (فشل التحديث السحابي)');
-        return null;
+        return { status: 'error', message: err.message || 'network' };
       }
+    }
+
+    // Google Sheets caps a cell at 50,000 characters. A 3 MB photo became a ~4,000,000
+    // character data URI, so setValue threw and the whole updateLicense write failed —
+    // taking plate, driver and chassis down with it.
+    const PHOTO_SYNC_BUDGET = 45000;
+
+    // Shrink a data URI until it fits one cell. Resolves to '' if it cannot.
+    function compressPhotoForSheet(dataUrl) {
+      return new Promise(resolve => {
+        if (!dataUrl) return resolve('');
+        if (dataUrl.length <= PHOTO_SYNC_BUDGET) return resolve(dataUrl);
+
+        const img = new Image();
+        img.onload = () => {
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          for (let attempt = 0; attempt < 8; attempt++) {
+            canvas.width = Math.max(1, Math.round(width));
+            canvas.height = Math.max(1, Math.round(height));
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            for (const q of [0.7, 0.5, 0.35]) {
+              const out = canvas.toDataURL('image/jpeg', q);
+              if (out.length <= PHOTO_SYNC_BUDGET) return resolve(out);
+            }
+            width *= 0.75;
+            height *= 0.75;
+          }
+          resolve('');
+        };
+        img.onerror = () => resolve('');
+        img.src = dataUrl;
+      });
+    }
+
+    // Match a free-text maintenance name to a tracked part key.
+    // The old first-substring-wins loop let a short entry such as "فلتر" capture
+    // "زيت المحرك وفلتر الزيت" and reset the wrong counter.
+    function findPartKey(parts, type) {
+      if (!parts || !type) return null;
+      const t = String(type).trim();
+      if (!t) return null;
+      const entries = Object.entries(parts).filter(([k, p]) => k && p && p.name);
+
+      const exact = entries.find(([, p]) => p.name === t);
+      if (exact) return exact[0];
+
+      // Longest tracked name contained in the typed text wins.
+      const contained = entries
+        .filter(([, p]) => t.includes(p.name))
+        .sort((a, b) => b[1].name.length - a[1].name.length);
+      if (contained.length) return contained[0][0];
+
+      // The reverse (typed text is a fragment of a part name) is only safe when
+      // exactly one part matches.
+      const fragment = entries.filter(([, p]) => p.name.includes(t));
+      if (fragment.length === 1) return fragment[0][0];
+
+      return null;
+    }
+
+    function resolvePartKey(car, partName) {
+      return findPartKey(car.parts, partName);
+    }
+
+    // Report the real outcome of a cloud write instead of assuming it succeeded.
+    function reportSync(res, okMsg) {
+      if (res && res.status === 'success') {
+        if (okMsg) showToast(okMsg);
+        return true;
+      }
+      const why = (res && res.message) ? res.message : 'تعذر الاتصال';
+      showToast('تم الحفظ محلياً فقط — لم يصل إلى Google Sheets (' + why + ')', 'error');
+      return false;
+    }
+
+    // Local date as YYYY-MM-DD. toLocaleDateString('ar-EG') emits Arabic-Indic digits
+    // plus RTL marks, which Sheets stores as unsortable, unparseable text.
+    function todayISO() {
+      const d = new Date();
+      return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
     }
 
     // Merge cloud data to local structures
@@ -1380,13 +1491,22 @@
         cloudData.cars.forEach(remoteCar => {
           const localCar = fleetData.find(c => String(c.id) === String(remoteCar.ID));
           if (localCar) {
-            localCar.currentKm = Number(remoteCar.CurrentKm) || localCar.currentKm;
-            localCar.license.plate = remoteCar.Plate || localCar.license.plate;
-            localCar.license.driver = remoteCar.Driver || localCar.license.driver;
-            localCar.license.chassis = remoteCar.Chassis || localCar.license.chassis;
-            localCar.license.motor = remoteCar.Motor || localCar.license.motor;
-            localCar.license.expiryDate = remoteCar.ExpiryDate || localCar.license.expiryDate;
-            if (remoteCar.PhotoUrl && remoteCar.PhotoUrl.startsWith('data:image')) {
+            // `x || fallback` treated a real 0 / "" from the sheet as "no value", so an
+            // odometer of 0 or a field cleared in Sheets never propagated back down.
+            if (remoteCar.CurrentKm !== '' && remoteCar.CurrentKm !== null && remoteCar.CurrentKm !== undefined && !isNaN(Number(remoteCar.CurrentKm))) {
+              localCar.currentKm = Number(remoteCar.CurrentKm);
+            }
+            const licenseFields = {
+              plate: 'Plate', driver: 'Driver', chassis: 'Chassis',
+              motor: 'Motor', expiryDate: 'ExpiryDate'
+            };
+            Object.entries(licenseFields).forEach(([localKey, remoteKey]) => {
+              const v = remoteCar[remoteKey];
+              if (v !== null && v !== undefined) localCar.license[localKey] = String(v);
+            });
+            if (remoteCar.PhotoUrl === '') {
+              localCar.license.photo = '';
+            } else if (remoteCar.PhotoUrl && String(remoteCar.PhotoUrl).startsWith('data:image')) {
               localCar.license.photo = remoteCar.PhotoUrl;
             }
           }
@@ -1397,14 +1517,22 @@
       if (Array.isArray(cloudData.parts)) {
         cloudData.parts.forEach(p => {
           const localCar = fleetData.find(c => String(c.id) === String(p.CarID));
-          if (localCar && localCar.parts) {
-            localCar.parts[p.PartKey] = {
-              name: p.PartName || (localCar.parts[p.PartKey] ? localCar.parts[p.PartKey].name : p.PartKey),
-              cycle: Number(p.CycleKm) || 10000,
-              lastReplacedKm: Number(p.LastReplacedKm) || 0,
-              nextDueKm: Number(p.NextDueKm) || (Number(p.CycleKm) || 10000)
-            };
-          }
+          if (!localCar || !localCar.parts) return;
+
+          // Rows written before partKey was sent carry PartKey === "". Writing those into
+          // parts[""] created one phantom card and left every real part unsynced, so fall
+          // back to matching on the part name.
+          let key = p.PartKey;
+          if (!key) key = resolvePartKey(localCar, p.PartName);
+          if (!key) return;
+
+          const cycle = Number(p.CycleKm) > 0 ? Number(p.CycleKm) : 10000;
+          localCar.parts[key] = {
+            name: p.PartName || (localCar.parts[key] ? localCar.parts[key].name : key),
+            cycle: cycle,
+            lastReplacedKm: Number(p.LastReplacedKm) || 0,
+            nextDueKm: Number(p.NextDueKm) > 0 ? Number(p.NextDueKm) : cycle
+          };
         });
       }
 
@@ -1442,15 +1570,7 @@
           remoteRecords.forEach(m => {
             const exists = localCar.history.some(h => String(h.recordId) === String(m.RecordID));
             if (!exists) {
-              let partKey = null;
-              if (localCar.parts) {
-                for (let [k, p] of Object.entries(localCar.parts)) {
-                  if (m.Type.includes(p.name) || p.name.includes(m.Type)) {
-                    partKey = k;
-                    break;
-                  }
-                }
-              }
+              const partKey = findPartKey(localCar.parts, m.Type);
               localCar.history.push({
                 recordId: m.RecordID,
                 partKey: partKey,
@@ -1479,7 +1599,7 @@
           localCar.fuelLogs.forEach(localLog => {
             if (!remoteIds.has(String(localLog.recordId))) {
               const matched = remoteFuel.find(f =>
-                (f.Month === localLog.month || String(f.Distance) === String(localLog.distance)) &&
+                f.Month === localLog.month && String(f.Distance) === String(localLog.distance) &&
                 !localCar.fuelLogs.some(fl => String(fl.recordId) === String(f.RecordID))
               );
               if (matched) {
@@ -1714,8 +1834,13 @@
           renderButtons();
           renderDashboard();
 
-          // Sync license updates to cloud
-          postToGoogleScript({
+          // Full resolution stays local; only a cell-sized copy goes to the sheet.
+          const photoForSheet = await compressPhotoForSheet(base64Img);
+          if (!photoForSheet) {
+            showToast('تعذر تصغير صورة الرخصة بما يكفي لحفظها في Google Sheets (محفوظة محلياً فقط)', 'warning');
+          }
+
+          const res = await postToGoogleScript({
             action: "updateLicense",
             carId: car.id,
             plate: car.license.plate,
@@ -1723,8 +1848,9 @@
             chassis: car.license.chassis,
             motor: car.license.motor,
             expiryDate: car.license.expiryDate,
-            photoUrl: base64Img
+            photoUrl: photoForSheet
           });
+          reportSync(res, 'تم حفظ بيانات الرخصة في Google Sheets ✔️');
         }
       };
       reader.readAsDataURL(file);
@@ -1756,7 +1882,7 @@
       if (plateMatch) car.license.plate = plateMatch[1];
     }
 
-    function saveLicenseDetails() {
+    async function saveLicenseDetails() {
       const car = fleetData.find(c => c.id === selectedCarId);
       car.license.plate = document.getElementById('inpPlate').value.trim();
       car.license.driver = document.getElementById('inpDriver').value.trim();
@@ -1768,28 +1894,29 @@
       renderButtons();
       renderLicenseInfo(car);
       toggleLicenseEdit();
-      showToast('تم حفظ بيانات الرخصة بنجاح');
 
-      postToGoogleScript({
+      // photoUrl is sent back unchanged: omitting it let a server-side write of
+      // `data.photoUrl || ''` blank out the stored image.
+      const res = await postToGoogleScript({
         action: "updateLicense",
         carId: car.id,
         plate: car.license.plate,
         driver: car.license.driver,
         chassis: car.license.chassis,
         motor: car.license.motor,
-        expiryDate: car.license.expiryDate
+        expiryDate: car.license.expiryDate,
+        photoUrl: await compressPhotoForSheet(car.license.photo || '')
       });
+      reportSync(res, 'تم حفظ بيانات الرخصة بنجاح');
     }
 
-    function deleteLicenseImage() {
+    async function deleteLicenseImage() {
       if (!confirm('هل تريد بالتأكيد حذف صورة الرخصة المرفوعة؟')) return;
       const car = fleetData.find(c => c.id === selectedCarId);
       car.license.photo = "";
       persistLocal();
       renderLicenseInfo(car);
-      showToast('تم حذف صورة الرخصة');
-
-      postToGoogleScript({
+      const res = await postToGoogleScript({
         action: "updateLicense",
         carId: car.id,
         plate: car.license.plate,
@@ -1799,22 +1926,22 @@
         expiryDate: car.license.expiryDate,
         photoUrl: ""
       });
+      reportSync(res, 'تم حذف صورة الرخصة');
     }
 
-    function clearLicenseData() {
+    async function clearLicenseData() {
       if (!confirm('هل تريد مسح جميع بيانات رخصة هذه المركبة؟')) return;
       const car = fleetData.find(c => c.id === selectedCarId);
       car.license = { plate: "", driver: "", chassis: "", motor: "", expiryDate: "", photo: "" };
       persistLocal();
       renderButtons();
       renderDashboard();
-      showToast('تم تفريغ بيانات الرخصة');
-
-      postToGoogleScript({
+      const res = await postToGoogleScript({
         action: "updateLicense",
         carId: car.id,
         plate: "", driver: "", chassis: "", motor: "", expiryDate: "", photoUrl: ""
       });
+      reportSync(res, 'تم تفريغ بيانات الرخصة');
     }
 
     function renderPartsGrid(car) {
@@ -1965,13 +2092,7 @@
       const car = fleetData.find(c => c.id === selectedCarId);
       if (!car) return;
 
-      let matchedKey = null;
-      for (let [k, p] of Object.entries(car.parts)) {
-        if (type.includes(p.name) || p.name.includes(type)) {
-          matchedKey = k;
-          break;
-        }
-      }
+      let matchedKey = findPartKey(car.parts, type);
 
       if (matchedKey && car.parts[matchedKey]) {
         const part = car.parts[matchedKey];
@@ -1988,7 +2109,7 @@
       }
     }
 
-    function updateMileageDirectly() {
+    async function updateMileageDirectly() {
       const input = document.getElementById('liveKmInput');
       const val = parseInt(input.value, 10);
       if (isNaN(val) || val < 0) return alert('يرجى إدخال رقم عداد صحيح');
@@ -1998,13 +2119,13 @@
       persistLocal();
       renderButtons();
       renderDashboard();
-      showToast(`تم تحديث عداد ${car.name} إلى ${val.toLocaleString()} كم`);
 
-      postToGoogleScript({
+      const res = await postToGoogleScript({
         action: "updateMileage",
         carId: car.id,
         currentKm: val
       });
+      reportSync(res, `تم تحديث عداد ${car.name} إلى ${val.toLocaleString()} كم`);
     }
 
     // Registering maintenance and dispatching to cloud
@@ -2017,15 +2138,10 @@
       const earlyReason = document.getElementById('earlyReasonInput').value.trim();
 
       const car = fleetData.find(c => c.id === selectedCarId);
+      const previousKm = car.currentKm;
       car.currentKm = Math.max(car.currentKm, km);
 
-      let matchedKey = null;
-      for (let [k, p] of Object.entries(car.parts)) {
-        if (type.includes(p.name) || p.name.includes(type)) {
-          matchedKey = k;
-          break;
-        }
-      }
+      let matchedKey = findPartKey(car.parts, type);
 
       if (!matchedKey) {
         matchedKey = 'custom_' + Date.now();
@@ -2062,7 +2178,7 @@
       };
 
       const recordId = "MNT-" + Date.now();
-      const formattedDate = new Date().toLocaleDateString('ar-EG');
+      const formattedDate = todayISO();
 
       const newHistoryItem = {
         recordId,
@@ -2091,6 +2207,7 @@
         action: "logMaintenance",
         carId: car.id,
         carName: car.name,
+        partKey: matchedKey,
         type: type,
         serviceKm: km,
         nextKm: nextKm,
@@ -2105,6 +2222,21 @@
         newHistoryItem.recordId = res.recordId;
         persistLocal();
         showToast(`تم حفظ صيانة ${type} في Google Sheets بنجاح ✔️`);
+      } else {
+        reportSync(res, null);
+      }
+
+      // Logging a service advances the odometer locally; without this the Cars sheet
+      // kept its old reading while maintenance rows showed a much higher km.
+      if (car.currentKm !== previousKm) {
+        const kmRes = await postToGoogleScript({
+          action: "updateMileage",
+          carId: car.id,
+          currentKm: car.currentKm
+        });
+        if (!kmRes || kmRes.status !== 'success') {
+          reportSync(kmRes, null);
+        }
       }
     });
 
@@ -2118,12 +2250,7 @@
 
       let partKey = removedItem.partKey;
       if (!partKey && car.parts) {
-        for (let [k, p] of Object.entries(car.parts)) {
-          if (removedItem.type.includes(p.name) || p.name.includes(removedItem.type)) {
-            partKey = k;
-            break;
-          }
-        }
+        partKey = findPartKey(car.parts, removedItem.type);
       }
 
       if (partKey && car.parts[partKey]) {
@@ -2200,6 +2327,21 @@
         }
       }
 
+      // Deleting the maintenance row alone left the Parts row holding the due-km that
+      // the now-deleted service had set, which then synced straight back down.
+      if (deleteSuccess && ENABLE_PART_ROLLBACK && partKey && car.parts[partKey]) {
+        const part = car.parts[partKey];
+        await postToGoogleScript({
+          action: "updatePart",
+          carId: car.id,
+          partKey: partKey,
+          partName: part.name,
+          cycleKm: part.cycle,
+          lastReplacedKm: part.lastReplacedKm,
+          nextDueKm: part.nextDueKm
+        });
+      }
+
       if (deleteSuccess) {
         showToast('تم حذف سجل الصيانة من Google Sheets بنجاح ✔️');
         fetchLiveGoogleSheetData(false);
@@ -2245,7 +2387,7 @@
       if (!car.fuelLogs) car.fuelLogs = [];
 
       const recordId = "FUEL-" + Date.now();
-      const formattedDate = new Date().toLocaleDateString('ar-EG');
+      const formattedDate = todayISO();
 
       const newFuelLog = {
         recordId,
@@ -2289,6 +2431,8 @@
         newFuelLog.recordId = res.recordId;
         persistLocal();
         showToast('تم حفظ استهلاك الوقود في Google Sheets بنجاح ✔️');
+      } else {
+        reportSync(res, null);
       }
     }
 
@@ -2307,7 +2451,7 @@
         if (window._latestCloudData && Array.isArray(window._latestCloudData.fuelLogs)) {
           const matched = window._latestCloudData.fuelLogs.find(f =>
             String(f.CarID) === String(car.id) &&
-            (f.Month === removedItem.month || String(f.Distance) === String(removedItem.distance))
+            f.Month === removedItem.month && String(f.Distance) === String(removedItem.distance)
           );
           if (matched && matched.RecordID) {
             targetRecordId = matched.RecordID;
@@ -2336,7 +2480,7 @@
             window._latestCloudData = resJson.data;
             const orphan = resJson.data.fuelLogs.find(f =>
               String(f.CarID) === String(car.id) &&
-              (f.Month === removedItem.month || String(f.Distance) === String(removedItem.distance))
+              f.Month === removedItem.month && String(f.Distance) === String(removedItem.distance)
             );
             if (orphan && orphan.RecordID) {
               const retryRes = await postToGoogleScript({
